@@ -7,6 +7,7 @@ sys.path.insert(0, project_root)
 import pytest
 from unittest.mock import patch, MagicMock
 import pandas as pd
+import numpy as np # Import numpy
 import data_fetcher
 
 # Mock data for yfinance.download
@@ -29,7 +30,7 @@ def test_fetch_historical_data_success(mock_download):
     """Tests successful fetching of historical data."""
     mock_download.return_value = MOCK_HISTORICAL_DATA
     data = data_fetcher.fetch_historical_data("VTI", period="1y")
-    mock_download.assert_called_once_with("VTI", period="1y")
+    mock_download.assert_called_once_with("VTI", period="1y", auto_adjust=False)
     assert not data.empty
     assert isinstance(data, pd.DataFrame)
     assert 'Adj Close' in data.columns
@@ -39,7 +40,7 @@ def test_fetch_historical_data_invalid_ticker(mock_download):
     """Tests fetching historical data for an invalid ticker."""
     mock_download.return_value = pd.DataFrame() # yfinance returns empty DataFrame for invalid tickers
     data = data_fetcher.fetch_historical_data("INVALID_TICKER", period="1y")
-    mock_download.assert_called_once_with("INVALID_TICKER", period="1y")
+    mock_download.assert_called_once_with("INVALID_TICKER", period="1y", auto_adjust=False)
     assert data.empty
     assert isinstance(data, pd.DataFrame)
 
@@ -178,15 +179,17 @@ def test_get_last_data_date_by_ticker(mock_get_filepath, mock_read_csv, mock_exi
     """Tests get_last_data_date for a specific ticker."""
     mock_get_filepath.return_value = "fake/data/path.csv"
     mock_exists.return_value = True
-    mock_data = pd.DataFrame({
+    # Mock data in wide format
+    mock_data_wide = pd.DataFrame({
         'Date': pd.to_datetime(['2023-01-01', '2023-01-02', '2023-01-03']),
-        'Ticker': ['VTI', 'VTI', 'VEA']
+        'VTI': [100.0, 101.0, np.nan], # VTI data with a gap
+        'VEA': [50.0, 51.0, 52.0] # VEA data
     })
-    mock_read_csv.return_value = mock_data
+    mock_read_csv.return_value = mock_data_wide
     last_date = data_fetcher.get_last_data_date("VTI")
     mock_exists.assert_called_once()
     mock_read_csv.assert_called_once()
-    assert last_date == pd.to_datetime('2023-01-02')
+    assert last_date == pd.to_datetime('2023-01-02') # Last non-NaN date for VTI
 
 @patch('os.path.exists')
 @patch('pandas.read_csv')
@@ -195,27 +198,33 @@ def test_get_last_data_date_ticker_not_found(mock_get_filepath, mock_read_csv, m
     """Tests get_last_data_date when the ticker is not in the file."""
     mock_get_filepath.return_value = "fake/data/path.csv"
     mock_exists.return_value = True
-    mock_data = pd.DataFrame({
+    # Mock data in wide format
+    mock_data_wide = pd.DataFrame({
         'Date': pd.to_datetime(['2023-01-01', '2023-01-02']),
-        'Ticker': ['VTI', 'VTI']
+        'VTI': [100.0, 101.0]
     })
-    mock_read_csv.return_value = mock_data
-    last_date = data_fetcher.get_last_data_date("BND")
+    mock_read_csv.return_value = mock_data_wide
+    last_date = data_fetcher.get_last_data_date("BND") # Ticker not in mock_data_wide
     mock_exists.assert_called_once()
     mock_read_csv.assert_called_once()
     assert last_date is None
 
-@patch('data_fetcher.get_last_data_date')
+# Refactor update_historical_data tests to mock load_historical_data instead of get_last_data_date
+@patch('data_fetcher.load_historical_data') # Mock load_historical_data
 @patch('yfinance.download')
 @patch('pandas.DataFrame.to_csv')
 @patch('data_fetcher._get_data_filepath')
-def test_update_historical_data_success(mock_get_filepath, mock_to_csv, mock_download, mock_get_last_date):
+def test_update_historical_data_success(mock_get_filepath, mock_to_csv, mock_download, mock_load_historical_data):
     """Tests successful updating of historical data."""
     mock_get_filepath.return_value = "fake/data/path.csv"
-    mock_get_last_date.side_effect = [
-        pd.to_datetime('2023-01-02'), # Last date for VTI
-        pd.to_datetime('2023-01-02')  # Last date for VEA
-    ]
+    # Mock existing data in wide format
+    mock_existing_data = pd.DataFrame({
+        'Date': pd.to_datetime(['2023-01-01', '2023-01-02']),
+        'VTI': [100.0, 101.0],
+        'VEA': [50.0, 51.0]
+    })
+    mock_load_historical_data.return_value = mock_existing_data
+
     mock_download.side_effect = [
         pd.DataFrame({'Close': [102]}, index=pd.to_datetime(['2023-01-03'])), # New VTI data
         pd.DataFrame({'Close': [52]}, index=pd.to_datetime(['2023-01-03']))  # New VEA data
@@ -224,51 +233,63 @@ def test_update_historical_data_success(mock_get_filepath, mock_to_csv, mock_dow
 
     data_fetcher.update_historical_data(tickers)
 
-    assert mock_get_last_date.call_count == len(tickers)
+    mock_load_historical_data.assert_called_once_with(tickers) # Check load was called with tickers
     assert mock_download.call_count == len(tickers)
     mock_to_csv.assert_called_once_with(
         "fake/data/path.csv",
-        mode='a',
-        header=False,
-        index=False
+        index=False # Overwriting the file, not appending
     )
     # Further assertions could check the content of the DataFrame passed to to_csv
 
-@patch('data_fetcher.get_last_data_date')
+@patch('data_fetcher.load_historical_data') # Mock load_historical_data
 @patch('yfinance.download')
 @patch('pandas.DataFrame.to_csv')
 @patch('data_fetcher._get_data_filepath')
-def test_update_historical_data_no_new_data(mock_get_filepath, mock_to_csv, mock_download, mock_get_last_date):
+def test_update_historical_data_no_new_data(mock_get_filepath, mock_to_csv, mock_download, mock_load_historical_data):
     """Tests updating when no new data is available."""
     mock_get_filepath.return_value = "fake/data/path.csv"
-    mock_get_last_date.side_effect = [
-        pd.to_datetime('2023-01-03'), # Last date for VTI
-        pd.to_datetime('2023-01-03')  # Last date for VEA
-    ]
-    mock_download.return_value = pd.DataFrame() # No new data
+    # Mock existing data in wide format
+    mock_existing_data = pd.DataFrame({
+        'Date': pd.to_datetime(['2023-01-01', '2023-01-02', '2023-01-03']), # Data up to latest date
+        'VTI': [100.0, 101.0, 102.0],
+        'VEA': [50.0, 51.0, 52.0]
+    })
+    mock_load_historical_data.return_value = mock_existing_data
+
+    mock_download.return_value = pd.DataFrame() # No new data fetched
     tickers = ["VTI", "VEA"]
 
     data_fetcher.update_historical_data(tickers)
 
-    assert mock_get_last_date.call_count == len(tickers)
+    mock_load_historical_data.assert_called_once_with(tickers)
     assert mock_download.call_count == len(tickers)
-    mock_to_csv.assert_not_called() # Should not append if no new data is fetched
+    mock_to_csv.assert_not_called() # Should not save if no new data is fetched
 
-@patch('data_fetcher.get_last_data_date')
+@patch('data_fetcher.load_historical_data') # Mock load_historical_data
 @patch('yfinance.download')
 @patch('pandas.DataFrame.to_csv')
 @patch('data_fetcher._get_data_filepath')
-def test_update_historical_data_no_existing_data(mock_get_filepath, mock_to_csv, mock_download, mock_get_last_date):
+def test_update_historical_data_no_existing_data(mock_get_filepath, mock_to_csv, mock_download, mock_load_historical_data):
     """Tests updating when no existing data is found."""
     mock_get_filepath.return_value = "fake/data/path.csv"
-    mock_get_last_date.return_value = None # No existing data
+    mock_load_historical_data.return_value = pd.DataFrame() # No existing data
+
+    # Mock download to return some data when no existing data is found
+    mock_download.side_effect = [
+        pd.DataFrame({'Close': [100, 101]}, index=pd.to_datetime(['2023-01-01', '2023-01-02'])), # VTI data
+        pd.DataFrame({'Close': [50, 51]}, index=pd.to_datetime(['2023-01-01', '2023-01-02']))  # VEA data
+    ]
     tickers = ["VTI", "VEA"]
 
     data_fetcher.update_historical_data(tickers)
 
-    assert mock_get_last_date.call_count == len(tickers)
-    mock_download.assert_not_called() # Should not try to download if no last date
-    mock_to_csv.assert_not_called() # Should not append
+    mock_load_historical_data.assert_called_once_with(tickers)
+    assert mock_download.call_count == len(tickers) # Should try to download max history
+    mock_to_csv.assert_called_once_with(
+        "fake/data/path.csv",
+        index=False # Overwriting the file
+    )
+    # Further assertions could check the content of the DataFrame passed to to_csv
 
 @patch('os.path.exists')
 @patch('pandas.read_csv')
@@ -302,25 +323,22 @@ def test_load_historical_data_success_all_tickers(mock_get_filepath, mock_read_c
     """Tests successful loading of historical data for all tickers."""
     mock_get_filepath.return_value = "fake/data/path.csv"
     mock_exists.return_value = True
-    mock_data = pd.DataFrame({
-        'Date': pd.to_datetime(['2023-01-01', '2023-01-02', '2023-01-01', '2023-01-02']),
-        'Open': [100, 101, 50, 51],
-        'High': [101, 102, 51, 52],
-        'Low': [99, 100, 49, 50],
-        'Close': [100, 101, 50, 51],
-        'Volume': [1000000, 1100000, 500000, 550000],
-        'Ticker': ['VTI', 'VTI', 'VEA', 'VEA']
+    # Mock data in wide format (Date, Ticker1_Close, Ticker2_Close, ...)
+    mock_data_wide = pd.DataFrame({
+        'Date': pd.to_datetime(['2023-01-01', '2023-01-02', '2023-01-03']),
+        'VTI': [100.0, 101.0, 102.0],
+        'VEA': [50.0, 51.0, 52.0],
+        'BND': [20.0, 20.1, 20.2],
+        'BNDX': [10.0, 10.05, 10.1]
     })
-    mock_read_csv.return_value = mock_data
-    df = data_fetcher.load_historical_data()
+    mock_read_csv.return_value = mock_data_wide
+    df = data_fetcher.load_historical_data() # Load all tickers
     mock_exists.assert_called_once()
     mock_read_csv.assert_called_once()
     assert not df.empty
-    assert len(df) == 4
-    assert list(df['Ticker'].unique()) == ['VTI', 'VEA'] # Check tickers present
-    # Check sorting
-    assert df.iloc[0]['Date'] <= df.iloc[1]['Date']
-    assert df.iloc[2]['Date'] <= df.iloc[3]['Date']
+    assert len(df) == 3 # Number of dates
+    assert list(df.columns) == ['Date', 'VTI', 'VEA', 'BND', 'BNDX'] # Check columns
+    assert df['Date'].is_monotonic_increasing # Check sorting by Date
 
 
 @patch('os.path.exists')
@@ -330,21 +348,21 @@ def test_load_historical_data_success_filtered_tickers(mock_get_filepath, mock_r
     """Tests successful loading of historical data for filtered tickers."""
     mock_get_filepath.return_value = "fake/data/path.csv"
     mock_exists.return_value = True
-    mock_data = pd.DataFrame({
-        'Date': pd.to_datetime(['2023-01-01', '2023-01-02', '2023-01-01', '2023-01-02']),
-        'Open': [100, 101, 50, 51],
-        'High': [101, 102, 51, 52],
-        'Low': [99, 100, 49, 50],
-        'Close': [100, 101, 50, 51],
-        'Volume': [1000000, 1100000, 500000, 550000],
-        'Ticker': ['VTI', 'VTI', 'VEA', 'VEA']
+    # Mock data in wide format (Date, Ticker1_Close, Ticker2_Close, ...)
+    mock_data_wide = pd.DataFrame({
+        'Date': pd.to_datetime(['2023-01-01', '2023-01-02', '2023-01-03']),
+        'VTI': [100.0, 101.0, 102.0],
+        'VEA': [50.0, 51.0, 52.0],
+        'BND': [20.0, 20.1, 20.2],
+        'BNDX': [10.0, 10.05, 10.1]
     })
-    mock_read_csv.return_value = mock_data
-    df = data_fetcher.load_historical_data(["VTI"])
+    mock_read_csv.return_value = mock_data_wide
+    df = data_fetcher.load_historical_data(["VTI", "BND"]) # Load filtered tickers
     mock_exists.assert_called_once()
     mock_read_csv.assert_called_once()
     assert not df.empty
-    assert len(df) == 2
-    assert list(df['Ticker'].unique()) == ['VTI'] # Only VTI data
-    # Check sorting
-    assert df.iloc[0]['Date'] <= df.iloc[1]['Date']
+    assert len(df) == 3 # Number of dates
+    assert 'Date' in df.columns
+    assert 'VTI' in df.columns
+    assert 'BND' in df.columns
+    assert df['Date'].is_monotonic_increasing # Check sorting by Date

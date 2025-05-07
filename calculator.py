@@ -27,6 +27,71 @@ def calculate_allocations(total_stocks_allocation: float, international_stocks_a
         "BNDX": international_bonds_allocation_portfolio
     }
 
+def calculate_portfolio_composite_metrics(fund_details_list: list[dict], allocations: dict) -> dict:
+    """
+    Calculates weighted average yield, expense ratio, and beta for the portfolio.
+
+    Args:
+        fund_details_list (list[dict]): A list of dictionaries, each containing fund details.
+        allocations (dict): Dictionary with ticker symbols as keys and allocation percentages (0-100) as values.
+
+    Returns:
+        dict: A dictionary with weighted 'Yield', 'Expense Ratio', and 'Beta'.
+              Returns NaN for a metric if data is missing for any allocated fund.
+    """
+    total_allocation = sum(allocations.values())
+    if total_allocation == 0:
+        return {"Yield": 0.0, "Expense Ratio": 0.0, "Beta": 0.0}
+
+    weighted_yield = 0.0
+    weighted_expense_ratio = 0.0
+    weighted_beta = 0.0
+    valid_allocation_sum_yield = 0.0
+    valid_allocation_sum_er = 0.0
+    valid_allocation_sum_beta = 0.0
+
+    for fund_details in fund_details_list:
+        ticker = fund_details.get("symbol")
+        if ticker in allocations:
+            allocation_percent = allocations[ticker] / 100.0 # Convert to decimal
+
+            # Calculate weighted yield, handling missing data
+            fund_yield = fund_details.get("yield")
+            if fund_yield is not None and not np.isnan(fund_yield):
+                weighted_yield += fund_yield * allocation_percent
+                valid_allocation_sum_yield += allocation_percent
+            # Reason: Accumulate weighted yield only if fund yield data is available.
+
+            # Calculate weighted expense ratio, handling missing data
+            fund_er = fund_details.get("expense_ratio")
+            if fund_er is not None and not np.isnan(fund_er):
+                weighted_expense_ratio += fund_er * allocation_percent
+                valid_allocation_sum_er += allocation_percent
+            # Reason: Accumulate weighted expense ratio only if fund expense ratio data is available.
+
+            # Calculate weighted beta, handling missing data
+            fund_beta = fund_details.get("beta")
+            if fund_beta is not None and not np.isnan(fund_beta):
+                weighted_beta += fund_beta * allocation_percent
+                valid_allocation_sum_beta += allocation_percent
+            # Reason: Accumulate weighted beta only if fund beta data is available.
+
+
+    # Normalize by the sum of allocations for funds where data was available for that metric
+    # This handles cases where some funds have missing data for certain metrics
+    final_yield = weighted_yield / valid_allocation_sum_yield if valid_allocation_sum_yield > 0 else np.nan
+    final_expense_ratio = weighted_expense_ratio / valid_allocation_sum_er if valid_allocation_sum_er > 0 else np.nan
+    final_beta = weighted_beta / valid_allocation_sum_beta if valid_allocation_sum_beta > 0 else np.nan
+    # Reason: Calculate final weighted average, returning NaN if no valid data was included in the sum.
+
+
+    return {
+        "Yield": final_yield,
+        "Expense Ratio": final_expense_ratio,
+        "Beta": final_beta
+    }
+
+
 def calculate_portfolio_returns(historical_data: pd.DataFrame, allocations: dict) -> pd.Series:
     """
     Calculates the daily returns for the portfolio based on historical data and allocations.
@@ -212,6 +277,32 @@ def calculate_portfolio_period_return(daily_portfolio_returns: pd.Series, period
     if period_label == "max":
         cumulative_returns = (1 + daily_portfolio_returns).cumprod() - 1
         return cumulative_returns.iloc[-1]
+    elif period_label == "ytd":
+        # Calculate Year-to-Date return
+        end_year = end_date.year
+
+        # Check if there is any data within the current calendar year
+        if not any(date.year == end_year for date in daily_portfolio_returns.index):
+            return None # No data points in the current year
+
+        start_of_year = pd.Timestamp(f'{end_year}-01-01')
+        # Find the first trading day on or after the start of the year
+        ytd_start_date = daily_portfolio_returns.index[daily_portfolio_returns.index >= start_of_year].min()
+
+        # If ytd_start_date is NaN, it means there's no data from the start of the year onwards in the current year
+        if pd.isna(ytd_start_date):
+             return None
+
+        # Select daily returns from the start of the year to the end date
+        relevant_daily_returns = daily_portfolio_returns.loc[daily_portfolio_returns.index >= ytd_start_date]
+
+        # This check might be redundant now, but keep for safety
+        if relevant_daily_returns.empty:
+             return None
+
+        cumulative_returns_period = (1 + relevant_daily_returns).cumprod() - 1
+        return cumulative_returns_period.iloc[-1]
+
     else:
         offset = None
         if period_label == "1mo":
@@ -241,6 +332,22 @@ def calculate_portfolio_period_return(daily_portfolio_returns: pd.Series, period
 
         cumulative_returns_period = (1 + relevant_daily_returns).cumprod() - 1
         return cumulative_returns_period.iloc[-1]
+
+def calculate_all_portfolio_returns(daily_portfolio_returns: pd.Series) -> dict:
+    """
+    Calculates portfolio returns for a predefined set of periods.
+
+    Args:
+        daily_portfolio_returns (pd.Series): Series of daily returns for the portfolio (indexed by Date).
+
+    Returns:
+        dict: A dictionary with period labels as keys and calculated returns as values.
+    """
+    periods = ["1mo", "3mo", "6mo", "ytd", "1y", "3y", "5y", "10y", "max"]
+    returns = {}
+    for period in periods:
+        returns[period] = calculate_portfolio_period_return(daily_portfolio_returns, period)
+    return returns
 
 
 # Historical stock vs bond allocation return data (Max, Avg, Min annual returns)

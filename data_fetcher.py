@@ -133,26 +133,44 @@ def fetch_and_store_max_history(tickers: list[str]):
     else:
         print("No data fetched for any ticker. Skipping save.")
 
-def get_last_data_date() -> pd.Timestamp | None:
+def get_last_data_date(ticker: str = None) -> pd.Timestamp | None:
     """
-    Reads the historical data file and returns the overall latest date.
+    Reads the historical data file and returns the overall latest date or the last date for a specific ticker.
+
+    Args:
+        ticker (str, optional): The ticker symbol to get the last date for. If None, returns the overall latest date. Defaults to None.
 
     Returns:
-        pd.Timestamp | None: The last date in the data, or None if the file doesn't exist or is empty.
+        pd.Timestamp | None: The last date in the data for the specified ticker or overall, or None if the file doesn't exist, is empty, or the ticker is not found/has no data.
     """
     data_filepath = _get_data_filepath()
     if not os.path.exists(data_filepath):
         return None
 
     try:
-        # Read only the Date column to be efficient
-        df = pd.read_csv(data_filepath, usecols=['Date'], parse_dates=['Date'])
+        df = pd.read_csv(data_filepath, parse_dates=['Date'])
 
         if df.empty:
             return None
 
-        # In the wide format, the last date is the max date in the Date column
-        return df['Date'].max()
+        if ticker:
+            # Get the last non-NaN date for the specific ticker column
+            if ticker in df.columns:
+                # Ensure the ticker column is numeric (errors='coerce' will turn non-numeric into NaN)
+                df[ticker] = pd.to_numeric(df[ticker], errors='coerce')
+                # Find the max date where the ticker column is not NaN
+                last_date_series = df.dropna(subset=[ticker])['Date']
+                if not last_date_series.empty:
+                    return last_date_series.max()
+                else:
+                    print(f"No valid data found for ticker {ticker} in the historical data file.")
+                    return None
+            else:
+                print(f"Ticker {ticker} not found as a column in the historical data file.")
+                return None
+        else:
+            # Return the overall latest date from the Date column
+            return df['Date'].max()
 
     except Exception as e:
         print(f"Error reading data file to get last date: {e}")
@@ -190,7 +208,12 @@ def update_historical_data(tickers: list[str]):
                 # Fetch data, auto_adjust=False keeps 'Close' and 'Adj Close' separate, we want 'Close'
                 new_data = yf.download(ticker, start=start_date.strftime('%Y-%m-%d'), auto_adjust=False)
                 if not new_data.empty and 'Close' in new_data.columns:
-                    newly_fetched_close_series[ticker] = new_data['Close'].squeeze() # Get the Close series
+                    squeezed_data = new_data['Close'].squeeze()
+                    if pd.api.types.is_scalar(squeezed_data):
+                        # If squeeze returns a scalar, wrap it in a Series with the correct index
+                        newly_fetched_close_series[ticker] = pd.Series([squeezed_data], index=[new_data.index[0]])
+                    else:
+                        newly_fetched_close_series[ticker] = squeezed_data # It's already a Series
                     print(f"Successfully fetched new data for {ticker}.")
                 else:
                     print(f"No new data available for {ticker} since {last_date.strftime('%Y-%m-%d')}.")
@@ -202,7 +225,12 @@ def update_historical_data(tickers: list[str]):
             try:
                  data = yf.download(ticker, period="max", auto_adjust=False)
                  if not data.empty and 'Close' in data.columns:
-                      newly_fetched_close_series[ticker] = data['Close'].squeeze()
+                      squeezed_data = data['Close'].squeeze()
+                      if pd.api.types.is_scalar(squeezed_data):
+                           # If squeeze returns a scalar, wrap it in a Series with the correct index
+                           newly_fetched_close_series[ticker] = pd.Series([squeezed_data], index=[data.index[0]])
+                      else:
+                           newly_fetched_close_series[ticker] = squeezed_data # It's already a Series
                       print(f"Successfully fetched max data for {ticker}.")
                  else:
                       print(f"Fetched empty data or missing 'Close' for {ticker}.")
@@ -212,7 +240,10 @@ def update_historical_data(tickers: list[str]):
 
     if newly_fetched_close_series:
         # Combine all newly fetched Close series into a single DataFrame, aligning by Date index
-        new_data_df = pd.DataFrame(newly_fetched_close_series)
+        # Ensure all values in newly_fetched_close_series are Series before creating DataFrame
+        series_dict = {k: (v if isinstance(v, pd.Series) else pd.Series([v])) for k, v in newly_fetched_close_series.items()}
+        new_data_df = pd.DataFrame(series_dict)
+
 
         if not existing_data.empty:
             # Combine existing and new data

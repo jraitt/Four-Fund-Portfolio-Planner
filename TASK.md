@@ -53,6 +53,7 @@ This document outlines the tasks required to build the Four Fund Portfolio Plann
 
 ## Discovered During Work
 
+- [ ] Add 'Selected Portfolio Details' table (Yield, ER, Beta, Period Returns) below 'Fund Details' table. (Date: 2025-05-07)
 (Add any new tasks or TODOs discovered during development here)
 
 ## Completed Tasks
@@ -61,6 +62,8 @@ This document outlines the tasks required to build the Four Fund Portfolio Plann
 - [x] Create `PLANNING.md`
 - [x] Create `TASK.md`
 - [x] Add Historic Stock vs. Bonds Returns table with interpolation
+- [x] Fix NameError for portfolio_daily_returns in app.py (Date: 2025-05-07)
+- [x] Fix failing tests in tests/test_calculator.py and tests/test_visualizer.py (Date: 2025-05-07)
 
 ## Persistent Historical Data Storage & Update
 
@@ -72,4 +75,3 @@ This document outlines the tasks required to build the Four Fund Portfolio Plann
 - [ ] Integrate app-triggered update logic in app.py (check on load, prompt user)
 - [ ] Update app to use data_fetcher.load_historical_data for charts/calculations
 - [ ] Add unit tests for new data_fetcher functions
-- [ ] Add task to TASK.md - (Date: 2025-05-06) Fetch max yfinance data, store permanently, update monthly (app-triggered >31 days with prompt).

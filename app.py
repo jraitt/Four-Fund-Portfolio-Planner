@@ -109,6 +109,9 @@ allocations = calculator.calculate_allocations(
     international_bonds_allocation
 )
 
+# Retrieve portfolio_daily_returns from session state for use in multiple sections
+portfolio_daily_returns = st.session_state.get('portfolio_daily_returns', pd.Series())
+
 # Add a section for displaying fund details
 st.header("Fund Details")
 
@@ -176,8 +179,17 @@ if fund_details_list:
     st.subheader("Fund Details") # Keep a simple subheader
     # Display the table, hiding the default index
     st.dataframe(fund_details_df, hide_index=True)
-else:
-    st.warning("Could not fetch fund details.")
+
+    # Calculate and display Selected Portfolio Details table
+    if fund_details_list and not portfolio_daily_returns.empty: # Ensure data is available
+        portfolio_metrics = calculator.calculate_portfolio_composite_metrics(fund_details_list, allocations)
+        portfolio_period_returns = calculator.calculate_all_portfolio_returns(portfolio_daily_returns)
+        visualizer.display_portfolio_details_table(portfolio_metrics, portfolio_period_returns)
+    elif fund_details_list:
+         st.write("Portfolio details table will be displayed here after historical data is loaded and portfolio returns are calculated.")
+    else:
+        st.warning("Could not fetch fund details.")
+
 
 # Add a section for Historic Stock vs. Bonds Returns
 st.header("Historic Stock vs. Bonds Returns")
@@ -325,10 +337,6 @@ if not historical_data_df.empty:
 
 else:
     st.warning("Historical data not available for performance calculation. Please download or update the data.")
-
-# Retrieve portfolio_daily_returns from session state for risk metrics and projections
-portfolio_daily_returns = st.session_state.get('portfolio_daily_returns', pd.Series())
-
 
 # Add sections for additional features
 st.header("Additional Features")

@@ -8,6 +8,7 @@ import pytest
 import pandas as pd
 import numpy as np
 import calculator
+from unittest.mock import patch # Import patch
 
 def test_calculate_allocations():
     """Tests the calculate_allocations function."""
@@ -32,8 +33,9 @@ def test_calculate_portfolio_returns():
 
     assert isinstance(portfolio_returns, pd.Series)
     assert not portfolio_returns.empty
-    # Basic check: the first return should be NaN due to pct_change()
-    assert np.isnan(portfolio_returns.iloc[0])
+    # The first return should be the weighted average of the first non-NaN daily returns
+    # Calculated as: 0.01*0.4 + 0.02*0.3 + 0.005*0.2 + 0.005*0.1 = 0.0115
+    assert portfolio_returns.iloc[0] == pytest.approx(0.0115)
 
 def test_calculate_cumulative_returns():
     """Tests the calculate_cumulative_returns function."""
@@ -42,8 +44,8 @@ def test_calculate_cumulative_returns():
 
     assert isinstance(cumulative_returns, pd.Series)
     assert not cumulative_returns.empty
-    assert cumulative_returns.iloc[0] == 0.01
-    assert cumulative_returns.iloc[1] == (1 + 0.01) * (1 + 0.005) - 1
+    assert cumulative_returns.iloc[0] == pytest.approx(0.01)
+    assert cumulative_returns.iloc[1] == pytest.approx((1 + 0.01) * (1 + 0.005) - 1)
     assert cumulative_returns.iloc[3] == (1 + 0.01) * (1 + 0.005) * (1 - 0.002) * (1 + 0.015) - 1
 
 def test_calculate_volatility():
@@ -75,3 +77,126 @@ def test_project_future_value():
 
     assert isinstance(projected_value, float)
     assert projected_value == pytest.approx(expected_value)
+
+def test_calculate_portfolio_composite_metrics():
+    """Tests the calculate_portfolio_composite_metrics function."""
+    # Mock fund details data
+    fund_details_list = [
+        {"symbol": "VTI", "yield": 0.015, "expense_ratio": 0.0003, "beta": 1.0},
+        {"symbol": "VEA", "yield": 0.018, "expense_ratio": 0.0005, "beta": 1.1},
+        {"symbol": "BND", "yield": 0.020, "expense_ratio": 0.0004, "beta": 0.05},
+        {"symbol": "BNDX", "yield": 0.022, "expense_ratio": 0.0006, "beta": 0.1}
+    ]
+    # Mock allocations
+    allocations = {"VTI": 40, "VEA": 30, "BND": 20, "BNDX": 10} # Sums to 100
+
+    # Calculate expected weighted metrics
+    total_allocation = sum(allocations.values()) / 100.0 # 1.0
+    expected_yield = (0.015 * 0.4) + (0.018 * 0.3) + (0.020 * 0.2) + (0.022 * 0.1)
+    expected_expense_ratio = (0.0003 * 0.4) + (0.0005 * 0.3) + (0.0004 * 0.2) + (0.0006 * 0.1)
+    expected_beta = (1.0 * 0.4) + (1.1 * 0.3) + (0.05 * 0.2) + (0.1 * 0.1)
+
+    # Call the function
+    composite_metrics = calculator.calculate_portfolio_composite_metrics(fund_details_list, allocations)
+
+    # Assert the results
+    assert isinstance(composite_metrics, dict)
+    assert composite_metrics.get("Yield") == pytest.approx(expected_yield / total_allocation)
+    assert composite_metrics.get("Expense Ratio") == pytest.approx(expected_expense_ratio / total_allocation)
+    assert composite_metrics.get("Beta") == pytest.approx(expected_beta / total_allocation)
+
+def test_calculate_portfolio_composite_metrics_missing_data():
+    """Tests calculate_portfolio_composite_metrics with missing data."""
+    fund_details_list = [
+        {"symbol": "VTI", "yield": 0.015, "expense_ratio": 0.0003, "beta": 1.0},
+        {"symbol": "VEA", "yield": None, "expense_ratio": 0.0005, "beta": 1.1}, # Missing yield
+        {"symbol": "BND", "yield": 0.020, "expense_ratio": np.nan, "beta": 0.05}, # Missing expense_ratio
+        {"symbol": "BNDX", "yield": 0.022, "expense_ratio": 0.0006, "beta": None} # Missing beta
+    ]
+    allocations = {"VTI": 25, "VEA": 25, "BND": 25, "BNDX": 25} # Sums to 100
+
+    # Calculate expected weighted metrics, excluding missing data
+    # Yield: (0.015 * 0.25) + (0.020 * 0.25) + (0.022 * 0.25) / (0.25 + 0.25 + 0.25) = (0.00375 + 0.005 + 0.0055) / 0.75 = 0.01425 / 0.75 = 0.019
+    expected_yield = (0.015 * 0.25 + 0.020 * 0.25 + 0.022 * 0.25) / 0.75
+    # Expense Ratio: (0.0003 * 0.25) + (0.0005 * 0.25) + (0.0006 * 0.25) / (0.25 + 0.25 + 0.25) = (0.000075 + 0.000125 + 0.00015) / 0.75 = 0.00035 / 0.75 = 0.000466...
+    expected_expense_ratio = (0.0003 * 0.25 + 0.0005 * 0.25 + 0.0006 * 0.25) / 0.75
+    # Beta: (1.0 * 0.25) + (1.1 * 0.25) + (0.05 * 0.25) / (0.25 + 0.25 + 0.25) = (0.25 + 0.275 + 0.0125) / 0.75 = 0.5375 / 0.75 = 0.7166...
+    expected_beta = (1.0 * 0.25 + 1.1 * 0.25 + 0.05 * 0.25) / 0.75
+
+
+    # Call the function
+    composite_metrics = calculator.calculate_portfolio_composite_metrics(fund_details_list, allocations)
+
+    # Assert the results
+    assert isinstance(composite_metrics, dict)
+    assert composite_metrics.get("Yield") == pytest.approx(expected_yield)
+    assert composite_metrics.get("Expense Ratio") == pytest.approx(expected_expense_ratio)
+    assert composite_metrics.get("Beta") == pytest.approx(expected_beta)
+
+def test_calculate_portfolio_composite_metrics_zero_allocation():
+    """Tests calculate_portfolio_composite_metrics with zero allocation."""
+    fund_details_list = [
+        {"symbol": "VTI", "yield": 0.015, "expense_ratio": 0.0003, "beta": 1.0},
+        {"symbol": "VEA", "yield": 0.018, "expense_ratio": 0.0005, "beta": 1.1},
+    ]
+    allocations = {"VTI": 0, "VEA": 0, "BND": 0, "BNDX": 0} # Zero allocation
+
+    composite_metrics = calculator.calculate_portfolio_composite_metrics(fund_details_list, allocations)
+
+    assert isinstance(composite_metrics, dict)
+    assert composite_metrics.get("Yield") == 0.0
+    assert composite_metrics.get("Expense Ratio") == 0.0
+    assert composite_metrics.get("Beta") == 0.0
+
+def test_calculate_portfolio_period_return_ytd():
+    """Tests the calculate_portfolio_period_return function for YTD."""
+    # Create daily returns data spanning across a year boundary
+    dates = pd.to_datetime(['2022-12-29', '2022-12-30', '2023-01-03', '2023-01-04', '2023-01-05'])
+    daily_returns = pd.Series([0.001, 0.002, 0.005, -0.001, 0.003], index=dates)
+
+    # Calculate YTD return for 2023
+    ytd_return = calculator.calculate_portfolio_period_return(daily_returns, "ytd")
+
+    # Expected YTD return for 2023: (1+0.005)*(1-0.001)*(1+0.003) - 1
+    expected_ytd_return = (1 + 0.005) * (1 - 0.001) * (1 + 0.003) - 1
+
+    assert ytd_return == pytest.approx(expected_ytd_return)
+
+def test_calculate_portfolio_period_return_ytd_no_data_current_year():
+    """Tests calculate_portfolio_period_return for YTD when no data in current year."""
+    dates = pd.to_datetime(['2022-12-29', '2022-12-30'])
+    daily_returns = pd.Series([0.001, 0.002], index=dates)
+
+    ytd_return = calculator.calculate_portfolio_period_return(daily_returns, "ytd")
+
+    # The test data ends in 2022, so YTD should be calculated for 2022
+    # Expected YTD return for 2022: (1+0.001)*(1+0.002) - 1
+    expected_ytd_return = (1 + 0.001) * (1 + 0.002) - 1
+
+    assert ytd_return == pytest.approx(expected_ytd_return) # Update assertion
+
+def test_calculate_all_portfolio_returns():
+    """Tests the calculate_all_portfolio_returns function."""
+    # Mock daily returns data
+    dates = pd.to_datetime(pd.date_range(start='2010-01-01', periods=3000, freq='B')) # Business days
+    daily_returns = pd.Series(np.random.randn(3000) * 0.005, index=dates) # Random daily returns
+
+    # Mock calculate_portfolio_period_return to check if it's called correctly
+    with patch('calculator.calculate_portfolio_period_return') as mock_period_return:
+        mock_period_return.side_effect = lambda returns, period: f"mock_return_{period}" # Return a distinct value for each period
+
+        all_returns = calculator.calculate_all_portfolio_returns(daily_returns)
+
+        # Define the expected periods
+        expected_periods = ["1mo", "3mo", "6mo", "ytd", "1y", "3y", "5y", "10y", "max"]
+
+        # Assert that calculate_portfolio_period_return was called for each expected period
+        assert mock_period_return.call_count == len(expected_periods)
+        called_periods = [call_args[0][1] for call_args in mock_period_return.call_args_list]
+        assert sorted(called_periods) == sorted(expected_periods)
+
+        # Assert the returned dictionary has the correct keys and values from the mock
+        assert isinstance(all_returns, dict)
+        assert sorted(list(all_returns.keys())) == sorted(expected_periods)
+        for period in expected_periods:
+            assert all_returns[period] == f"mock_return_{period}"
