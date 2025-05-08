@@ -86,21 +86,17 @@ if not st.session_state['data_initialized']:
 # --- End Data Loading and Update Logic ---
 
 
-# Add a section for user inputs
-st.header("Portfolio Allocation")
-
-# Add a section for user inputs
-st.header("Portfolio Allocation")
 
 # Placeholders for input sliders
-total_stocks_allocation = st.sidebar.slider("Total Stocks (%)", 0, 100, 60, 5)
-international_stocks_allocation = st.sidebar.slider("International Stocks (%) within Stocks", 0, 100, 30, 5)
-international_bonds_allocation = st.sidebar.slider("International Bonds (%) within Bonds", 0, 100, 20, 5)
+total_stocks_allocation = st.sidebar.slider("Total Stocks (%)", 0, 100, 70, 5)
+international_stocks_allocation = st.sidebar.slider("International Stocks (%) within Stocks", 0, 100, 25, 5)
+international_bonds_allocation = st.sidebar.slider("International Bonds (%) within Bonds", 0, 100, 25, 5)
 
 # Calculate bond allocation
 total_bonds_allocation = 100 - total_stocks_allocation
 
-st.write(f"Total Bonds (%): {total_bonds_allocation}")
+# Add a section for user inputs
+st.header(f"Selected Stocks / Bonds Portfolio Allocation {total_stocks_allocation}% / {total_bonds_allocation}%")
 
 # Calculate specific fund allocations using calculator.py
 allocations = calculator.calculate_allocations(
@@ -111,9 +107,6 @@ allocations = calculator.calculate_allocations(
 
 # Retrieve portfolio_daily_returns from session state for use in multiple sections
 portfolio_daily_returns = st.session_state.get('portfolio_daily_returns', pd.Series())
-
-# Add a section for displaying fund details
-st.header("Fund Details")
 
 # Fetch and display fund details
 tickers = ["VTI", "VEA", "BND", "BNDX"]
@@ -238,7 +231,7 @@ for chart_title, (sizes, chart_labels) in pie_chart_data.items():
         # Ensure sizes are not all zero before generating chart
         if any(size > 0 for size in sizes):
             fig = visualizer.generate_pie_chart(sizes, chart_labels, chart_title)
-            st.pyplot(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True) # Display the Plotly figure
         else:
             st.subheader(chart_title) # Keep this subheader for the "No data" case
             st.write(f"No data to display for {chart_title}.")
@@ -326,9 +319,13 @@ if not historical_data_df.empty:
 
     # Display the cumulative returns line chart below the table
     if not portfolio_daily_returns.empty:
-        cumulative_returns = calculator.calculate_cumulative_returns(portfolio_daily_returns)
+        cumulative_returns_series = calculator.calculate_cumulative_returns(portfolio_daily_returns) # Renamed for clarity
         st.subheader("Cumulative Returns (Max History)")
-        st.line_chart(cumulative_returns)
+
+        # Use the visualizer function to generate Plotly chart
+        fig = visualizer.generate_historical_performance_plotly_chart(cumulative_returns_series, title="Cumulative Returns (Max History)")
+        st.plotly_chart(fig, use_container_width=True) # Display the Plotly figure
+
         # Store portfolio_daily_returns in session state for risk metrics and projections
         st.session_state['portfolio_daily_returns'] = portfolio_daily_returns
     else:

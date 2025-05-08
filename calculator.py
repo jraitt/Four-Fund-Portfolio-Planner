@@ -324,12 +324,23 @@ def calculate_portfolio_period_return(daily_portfolio_returns: pd.Series, period
 
         target_start_date = end_date - offset
 
-        # Select daily returns within the period
-        relevant_daily_returns = daily_portfolio_returns.loc[daily_portfolio_returns.index > target_start_date]
+        # Find the closest trading day on or before the target_start_date
+        start_date_series = daily_portfolio_returns.loc[daily_portfolio_returns.index <= target_start_date]
 
-        if relevant_daily_returns.empty:
+        if start_date_series.empty:
             return None # Not enough historical data for the period
 
+        actual_start_date = start_date_series.index[-1]
+
+        # Select daily returns from the actual start date to the end date (inclusive)
+        relevant_daily_returns = daily_portfolio_returns.loc[daily_portfolio_returns.index >= actual_start_date]
+
+        if relevant_daily_returns.empty:
+             return None # Should not happen if actual_start_date was found, but for safety
+
+        # Calculate cumulative returns for the period
+        # Need to adjust the calculation slightly since we are including the start date's return
+        # The cumulative product should start from 1 before multiplying by (1 + returns)
         cumulative_returns_period = (1 + relevant_daily_returns).cumprod() - 1
         return cumulative_returns_period.iloc[-1]
 

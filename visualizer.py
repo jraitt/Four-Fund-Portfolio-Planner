@@ -1,10 +1,11 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np # Import numpy
+import matplotlib.ticker as mticker # Import for percentage formatting on charts
 
 def generate_pie_chart(sizes: list, labels: list, title: str):
     """
-    Generates and returns a matplotlib figure for a pie chart.
+    Generates and returns a Plotly figure for a donut chart.
 
     Args:
         sizes (list): List of sizes for each wedge of the pie chart.
@@ -12,28 +13,47 @@ def generate_pie_chart(sizes: list, labels: list, title: str):
         title (str): The title of the pie chart.
 
     Returns:
-        matplotlib.figure.Figure: The figure object containing the pie chart.
+        plotly.graph_objects.Figure: The figure object containing the donut chart.
     """
-    fig, ax = plt.subplots() # Remove figsize
-    ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
-    ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-    ax.set_title(title, fontweight='bold', fontsize=14) # Make title bold and larger
-    plt.tight_layout() # Add tight_layout
+    # Define a vibrant color palette with the specified color 1
+    vibrant_colors = ['#ff401e', '#1e66ff', '#ff9048', '#1eeeff'] # Specified color 1
+
+    # Define color mapping based on the new groupings
+    color_map = {
+        'Stocks': vibrant_colors[0],
+        'US Stocks': vibrant_colors[0],
+        'US': vibrant_colors[0], # US in US vs INT chart
+        'Bonds': vibrant_colors[1],
+        'US Bonds': vibrant_colors[1],
+        'International': vibrant_colors[1], # INT in US vs INT chart
+        'International Stocks': vibrant_colors[2],
+        'International Bonds': vibrant_colors[3]
+    }
+
+    # Get colors in the order of labels
+    colors = [color_map.get(label, 'gray') for label in labels] # Default to gray if label not in map
+
+    fig = go.Figure(data=[go.Pie(labels=labels, values=sizes, hole=.4, marker=dict(colors=colors))]) # Use go.Pie with hole and colors
+    fig.update_layout(title_text=title, title_x=0.5) # Center the title
     return fig
 
-def generate_historical_performance_chart(cumulative_returns: pd.Series):
+def generate_historical_performance_chart(cumulative_returns: pd.Series, title: str = "Historical Cumulative Returns"):
     """
     Generates and returns a matplotlib figure for the historical performance line chart.
 
     Args:
         cumulative_returns (pd.Series): Series containing the cumulative returns over time.
+        title (str, optional): The title of the chart. Defaults to "Historical Cumulative Returns".
 
     Returns:
         matplotlib.figure.Figure: The figure object containing the line chart.
     """
     fig, ax = plt.subplots()
     ax.plot(cumulative_returns.index, cumulative_returns.values)
-    ax.set_title("Historical Cumulative Returns")
+    ax.set_title(title)
+
+    # Format y-axis as percentages
+    ax.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1.0))
     ax.set_xlabel("Date")
     ax.set_ylabel("Cumulative Return")
     plt.xticks(rotation=45)
@@ -62,10 +82,11 @@ def display_portfolio_details_table(portfolio_metrics: dict, portfolio_returns: 
     for metric, value in portfolio_metrics.items():
         table_data["Metric"].append(metric)
         # Format as percentage if it's ER or Yield, otherwise format Beta
-        if metric in ["Yield", "Expense Ratio"]:
-            table_data["Value"].append(f"{value:.4f}%" if value is not None and not np.isnan(value) else "N/A")
-            # Reason: Format Yield and Expense Ratio as percentages with 4 decimal places.
-        elif metric == "Beta":
+        if metric in ["Yield"]:
+            # Assuming value is a decimal representation of a percentage, multiply by 100 before formatting
+            table_data["Value"].append(f"{value*100:.2f}%" if value is not None and not np.isnan(value) else "N/A")
+            # Reason: Format Yield and Expense Ratio as percentages with 2 decimal places after multiplying by 100.
+        elif metric in ["Beta", "Expense Ratio"]:
              table_data["Value"].append(f"{value:.2f}" if value is not None and not np.isnan(value) else "N/A")
              # Reason: Format Beta with 2 decimal places.
         else:
@@ -96,11 +117,43 @@ def display_portfolio_details_table(portfolio_metrics: dict, portfolio_returns: 
 
 
     df = pd.DataFrame(table_data)
-    st.table(df)
+    # Transpose the DataFrame and reset index to make metrics columns
+    df_transposed = df.set_index("Metric").T.reset_index(drop=True)
+    st.table(df_transposed) # Display the transposed table without index
 
 
 # TODO: Consider adding options for different time periods (1y, 3y, 5y, 10y) for the historical chart
 # TODO: Consider using Plotly for interactive charts as mentioned in PLANNING.md
+
+import plotly.express as px
+import plotly.graph_objects as go
+
+def generate_historical_performance_plotly_chart(cumulative_returns: pd.Series, title: str):
+    """
+    Generates and returns a Plotly figure for the historical performance line chart.
+
+    Args:
+        cumulative_returns (pd.Series): Series containing the cumulative returns over time.
+        title (str): The title of the chart.
+
+    Returns:
+        plotly.graph_objects.Figure: The figure object containing the line chart.
+    """
+    # Convert Series to DataFrame for Plotly
+    # Ensure the index is a proper datetime type if it's not already
+    if not isinstance(cumulative_returns.index, pd.DatetimeIndex):
+        cumulative_returns.index = pd.to_datetime(cumulative_returns.index)
+
+    cumulative_returns_df = cumulative_returns.reset_index()
+    cumulative_returns_df.columns = ['Date', 'Cumulative Return']
+
+    fig = px.line(cumulative_returns_df, x='Date', y='Cumulative Return', title=title)
+
+    # Format Y-axis as percentages
+    fig.update_layout(yaxis_tickformat=".0%")
+
+    return fig
+
 
 if __name__ == '__main__':
     # Example Usage (requires sample data)
