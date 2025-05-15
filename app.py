@@ -85,6 +85,14 @@ if not st.session_state['data_initialized']:
 
 # --- End Data Loading and Update Logic ---
 
+# Add a button for manual data update
+if st.button("Force Update Historical Data"):
+    with st.spinner("Updating historical data..."):
+        data_fetcher.update_historical_data(CONFIGURED_HELPERS, force_update=True)
+    st.success("Historical data updated successfully!")
+    st.session_state['data_initialized'] = True
+    st.rerun() # Rerun to load the data
+
 
 
 # Placeholders for input sliders
@@ -281,7 +289,7 @@ if not historical_data_df.empty:
             for period in PERIODS:
                 # Use the original combined_data for calculations, not the dropna version used for finding earliest date
                 ret = calculator.calculate_individual_fund_period_return(combined_data[ticker].dropna(), period) # Pass dropna series for calculation
-                fund_returns.append(f"{ret:.1%}" if ret is not None else "N/A")
+                fund_returns.append(f"{ret:.2%}" if ret is not None else "N/A")
             returns_data[ticker] = fund_returns
         else:
             # If ticker data is not in the loaded data (shouldn't happen with current load logic, but as a fallback)
@@ -294,7 +302,7 @@ if not historical_data_df.empty:
     if not portfolio_daily_returns.empty:
         for period in PERIODS:
             ret = calculator.calculate_portfolio_period_return(portfolio_daily_returns, period)
-            portfolio_returns.append(f"{ret:.1%}" if ret is not None else "N/A")
+            portfolio_returns.append(f"{ret:.2%}" if ret is not None else "N/A")
     else:
         portfolio_returns = ["N/A"] * len(PERIODS)
 
@@ -314,6 +322,7 @@ if not historical_data_df.empty:
     returns_df = returns_df.rename(columns=new_column_names)
 
 
+    returns_df = returns_df.T
     st.subheader("Period Returns (%)")
     st.dataframe(returns_df)
 

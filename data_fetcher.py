@@ -176,7 +176,7 @@ def get_last_data_date(ticker: str = None) -> pd.Timestamp | None:
         print(f"Error reading data file to get last date: {e}")
         return None
 
-def update_historical_data(tickers: list[str]):
+def update_historical_data(tickers: list[str], force_update: bool = False):
     """
     Updates the historical data file with new data (Close price only) from the last stored date for each ticker.
     Loads existing data, fetches new data, combines them, and overwrites the file.

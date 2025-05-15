@@ -5,6 +5,7 @@ This is an interactive web application built with Streamlit that allows users to
 ## Features
 
 - **Flexible Allocation:** Users can specify the percentage allocation for stocks, international stocks (within the stock allocation), and international bonds (within the bond allocation) in 5% increments.
+- **Manual Data Update:** Allows users to force an update of historical data from Yahoo Finance, even if the data is less than 31 days old.
 - **Fund Details Table:** Displays key information for each of the four funds, including symbol, name, category, yield, expense ratio, and Beta, fetched using `yfinance`.
 - **Allocation Visualizations:** Provides multiple pie charts to visualize the portfolio breakdown:
     - Stocks vs Bonds

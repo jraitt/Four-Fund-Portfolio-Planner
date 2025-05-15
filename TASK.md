@@ -51,9 +51,18 @@ This document outlines the tasks required to build the Four Fund Portfolio Plann
 - [x] Update `PLANNING.md` with any changes or refinements made during development.
 - [x] Add docstrings and inline comments to the code.
 
+## Allow manual update of historical data even if less than 31 days old
+
+- [x] Add `force_update: bool = False` parameter to `data_fetcher.update_historical_data`.
+- [x] In `app.py`, add a 'Force Update Historical Data' button.
+- [x] Implement logic in `app.py` for the new button to call `update_historical_data` with `force_update=True`, bypassing the 31-day check.
+- [x] Ensure existing unit tests for `data_fetcher.update_historical_data` pass and add new ones if the `force_update` flag implies different internal behavior (though not expected for this iteration).
+- [x] Update `README.md` to mention the new manual update button.
+
 ## Discovered During Work
 
 - [x] Add 'Selected Portfolio Details' table (Yield, ER, Beta, Period Returns) below 'Fund Details' table. (Date: 2025-05-07)
+- [x] Change orientation of "Period Returns (%)" table in `app.py` so periods are columns and tickers/portfolio are rows. (Date: 2025-05-15)
 (Add any new tasks or TODOs discovered during development here)
 
 ## Completed Tasks
