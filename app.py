@@ -297,33 +297,6 @@ else:
      st.warning("Could not calculate portfolio returns for cumulative chart.")
 
 
-# Add sections for additional features
-st.header("Additional Features")
-
-# Display Risk Metrics
-if not portfolio_daily_returns.empty:
-    volatility = calculator.calculate_volatility(portfolio_daily_returns)
-    sharpe_ratio = calculator.calculate_sharpe_ratio(portfolio_daily_returns)
-
-    st.subheader("Risk Metrics")
-    st.write(f"Annualized Volatility: {volatility:.2f}")
-    st.write(f"Annualized Sharpe Ratio (assuming 0% risk-free rate): {sharpe_ratio:.2f}")
-else:
-     st.write("Risk metrics will be displayed here after historical data is loaded and portfolio returns are calculated.")
-
-
-# Projections
-st.subheader("Projections")
-initial_investment = st.number_input("Initial Investment Amount ($)", min_value=0.0, value=1000.0, step=100.0)
-projection_years = st.slider("Projection Years", 1, 50, 10)
-
-if not portfolio_daily_returns.empty:
-    projected_value = calculator.project_future_value(portfolio_daily_returns, initial_investment, projection_years)
-    st.write(f"Projected value after {projection_years} years: ${projected_value:,.2f}")
-else:
-    st.write("Enter an initial investment and select projection years to see projections (requires historical data).")
-
-
 # Save/Load Portfolios
 st.subheader("Save/Load Portfolio")
 
