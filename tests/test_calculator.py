@@ -175,6 +175,34 @@ def test_calculate_portfolio_period_return_ytd_no_data_current_year():
 
     assert ytd_return == pytest.approx(expected_ytd_return) # Update assertion
 
+def test_calculate_individual_fund_period_return_ytd():
+    """Tests the calculate_individual_fund_period_return function for YTD."""
+    # Create price data spanning across a year boundary
+    dates = pd.to_datetime(['2022-12-29', '2022-12-30', '2023-01-03', '2023-01-04', '2023-01-05'])
+    prices = pd.Series([100, 101, 101.5, 101.4, 101.7], index=dates)
+
+    # Calculate YTD return for 2023
+    ytd_return = calculator.calculate_individual_fund_period_return(prices, "ytd")
+
+    # Expected YTD return for 2023: (End price / Price on last trading day of previous year) - 1
+    # End price is on 2023-01-05 (101.7), Price on last trading day of 2022 is on 2022-12-30 (101)
+    expected_ytd_return = (101.7 / 101) - 1
+
+    assert ytd_return == pytest.approx(expected_ytd_return)
+
+def test_calculate_individual_fund_period_return_ytd_no_data_current_year():
+    """Tests calculate_individual_fund_period_return for YTD when no data in current year."""
+    dates = pd.to_datetime(['2022-12-29', '2022-12-30'])
+    prices = pd.Series([100, 101], index=dates)
+
+    ytd_return = calculator.calculate_individual_fund_period_return(prices, "ytd")
+
+    # If no data in the current year, YTD should be calculated from the first available data point.
+    # Start price is on 2022-12-29 (100), End price is on 2022-12-30 (101)
+    expected_ytd_return = (101 / 100) - 1
+
+    assert ytd_return == pytest.approx(expected_ytd_return)
+
 def test_calculate_all_portfolio_returns():
     """Tests the calculate_all_portfolio_returns function."""
     # Mock daily returns data

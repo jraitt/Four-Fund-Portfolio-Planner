@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
+import os
 
 # Basic in-memory cache
 _data_cache = {}
@@ -73,8 +74,6 @@ def fetch_fund_details(ticker: str) -> dict:
     except Exception as e:
         print(f"Error fetching details for {ticker}: {e}")
         return {}
-
-import os
 
 DATA_DIR = "data"
 HISTORICAL_DATA_FILE = "historical_fund_data.csv"

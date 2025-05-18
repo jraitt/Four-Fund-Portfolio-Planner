@@ -19,8 +19,8 @@ from datetime import datetime, timedelta
 st.set_page_config(layout="wide")
 
 # Set the title of the application
-st.title("Four Fund Portfolio Planner")
-
+st.title("📈 Four Fund Portfolio Planner")
+st.write("Use the sliders in the left panel to select your desired equity allocation between Stocks / Bonds, and US vs. International funds.")
 # --- Data Loading and Update Logic ---
 # Load configured tickers from portfolio_config.json
 CONFIG_FILE = "portfolio_config.json"
@@ -104,7 +104,16 @@ international_bonds_allocation = st.sidebar.slider("International Bonds (%) with
 total_bonds_allocation = 100 - total_stocks_allocation
 
 # Add a section for user inputs
-st.header(f"Selected Stocks / Bonds Portfolio Allocation {total_stocks_allocation}% / {total_bonds_allocation}%")
+st.header(f"Selected Portfolio: &nbsp;&nbsp;&nbsp;Stocks: {total_stocks_allocation}% / Bonds: {total_bonds_allocation}%")
+
+# Get current stock allocation
+current_stock_allocation = total_stocks_allocation
+
+# Interpolate returns for the current allocation
+interpolated_returns = calculator.interpolate_returns(current_stock_allocation)
+
+# Add a section for Historic Stock vs. Bonds Returns
+st.subheader(f"Historic Returns:&nbsp;&nbsp;&nbsp;Min:&nbsp;&nbsp;&nbsp;{interpolated_returns['Min_Return']:.1f}%&nbsp;&nbsp;&nbsp;Avg:&nbsp;&nbsp;&nbsp; {interpolated_returns['Avg_Return']:.1f}%&nbsp;&nbsp;&nbsp;Max:&nbsp;&nbsp;&nbsp; {interpolated_returns['Max_Return']:.1f}%")
 
 # Calculate specific fund allocations using calculator.py
 allocations = calculator.calculate_allocations(
@@ -115,6 +124,9 @@ allocations = calculator.calculate_allocations(
 
 # Retrieve portfolio_daily_returns from session state for use in multiple sections
 portfolio_daily_returns = st.session_state.get('portfolio_daily_returns', pd.Series())
+
+# Define the periods to display returns for
+PERIODS = ["1mo", "3mo", "6mo", "ytd", "1y", "2y", "5y", "10y", "max"]
 
 # Fetch and display fund details
 tickers = ["VTI", "VEA", "BND", "BNDX"]
@@ -136,30 +148,21 @@ if fund_details_list:
         "symbol": "Symbol", # Rename for consistency
         "name": "Name",
         "category": "Category",
-        "ytd_return": "YTD",
-        "52_week_change_percent": "1-Year",
-        "three_year_average_return": "3-Year",
-        "five_year_average_return": "5-Year",
-        "expense_ratio": "Expense Ratio",
+        "expense_ratio": "ER",
         "yield": "Yield",
-        "beta": "Beta" # Rename for consistency
     })
 
     # Format percentage columns (excluding the new 'Portfolio %' which is already formatted)
-    percentage_columns = ["YTD", "1-Year", "3-Year", "5-Year", "Expense Ratio", "Yield"]
+    percentage_columns = ["ER", "Yield"]
     for col in percentage_columns:
         if col in fund_details_df.columns:
-            if col in ["YTD", "1-Year", "Expense Ratio"]:
+            if col in ["ER"]:
                 fund_details_df[col] = fund_details_df[col].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "N/A")
             else:
                 fund_details_df[col] = fund_details_df[col].apply(lambda x: f"{x:.2%}" if pd.notna(x) else "N/A")
 
-    # Handle Beta column
-    if "Beta" in fund_details_df.columns:
-        fund_details_df["Beta"] = fund_details_df["Beta"].apply(lambda x: x if pd.notna(x) else "N/A")
-
     # Reorder columns to put Portfolio % first
-    desired_order = ['Portfolio %', 'Symbol', 'Name', 'Category', 'Yield', 'Expense Ratio', 'Beta', 'YTD', '1-Year', '3-Year', '5-Year']
+    desired_order = ['Symbol', 'Name', 'Category', 'Portfolio %', 'Yield', 'ER']
     # Filter order based on actual columns present (in case some data wasn't fetched)
     actual_order = [col for col in desired_order if col in fund_details_df.columns]
     fund_details_df = fund_details_df[actual_order]
@@ -168,12 +171,7 @@ if fund_details_list:
     # Create a MultiIndex for columns (adjusting for the new column order)
     new_columns = []
     for col in fund_details_df.columns:
-        if col in ["YTD", "1-Year", "3-Year", "5-Year"]:
-            new_columns.append(("Returns", col))
-        elif col == 'Portfolio %':
-             new_columns.append(("", col)) # Keep Portfolio % at top level
-        else:
-            new_columns.append(("", col)) # Other columns at top level
+        new_columns.append(("", col)) # All columns at top level
 
     fund_details_df.columns = pd.MultiIndex.from_tuples(new_columns)
 
@@ -181,40 +179,75 @@ if fund_details_list:
     # Display the table, hiding the default index
     st.dataframe(fund_details_df, hide_index=True)
 
-    # Calculate and display Selected Portfolio Details table
-    if fund_details_list and not portfolio_daily_returns.empty: # Ensure data is available
-        portfolio_metrics = calculator.calculate_portfolio_composite_metrics(fund_details_list, allocations)
-        portfolio_period_returns = calculator.calculate_all_portfolio_returns(portfolio_daily_returns)
-        visualizer.display_portfolio_details_table(portfolio_metrics, portfolio_period_returns)
-    elif fund_details_list:
-         st.write("Portfolio details table will be displayed here after historical data is loaded and portfolio returns are calculated.")
-    else:
-        st.warning("Could not fetch fund details.")
+    # Load historical data from the CSV file
+    historical_data_df = data_fetcher.load_historical_data(CONFIGURED_HELPERS)
+
+    if not historical_data_df.empty:
+        # The data is already in the wide format (Date, Ticker1, Ticker2, ...)
+        # Set the 'Date' column as the index for calculations
+        combined_data = historical_data_df.set_index('Date')
+
+        # Ensure columns used in calculation are numeric (should be handled by load_historical_data, but double check)
+        numeric_cols = [col for col in CONFIGURED_HELPERS if col in combined_data.columns]
+        for col in numeric_cols:
+             combined_data[col] = pd.to_numeric(combined_data[col], errors='coerce')
+        combined_data.dropna(subset=numeric_cols, inplace=True) # Drop rows with NaN in ticker columns
+
+        # Calculate daily portfolio returns
+        portfolio_daily_returns = calculator.calculate_portfolio_returns(combined_data, allocations)
+
+        # Prepare data for the returns table
+        returns_data = {}
+        returns_data["Period"] = PERIODS
+
+        # Get earliest date for each fund and calculate individual fund returns
+        fund_earliest_dates = {}
+        for ticker in CONFIGURED_HELPERS:
+            if ticker in combined_data.columns:
+                fund_prices = combined_data[ticker].dropna() # Drop NaNs to find the first valid date
+                if not fund_prices.empty:
+                    earliest_date = fund_prices.index.min()
+                    fund_earliest_dates[ticker] = earliest_date.strftime('%#m/%#d/%Y') # Format as M/D/YYYY
+                else:
+                    fund_earliest_dates[ticker] = "N/A"
+
+                fund_returns = []
+                for period in PERIODS:
+                    # Use the original combined_data for calculations, not the dropna version used for finding earliest date
+                    ret = calculator.calculate_individual_fund_period_return(combined_data[ticker].dropna(), period) # Pass dropna series for calculation
+                    fund_returns.append(f"{ret:.2%}" if ret is not None else "N/A")
+                returns_data[ticker] = fund_returns
+            else:
+                # If ticker data is not in the loaded data (shouldn't happen with current load logic, but as a fallback)
+                fund_earliest_dates[ticker] = "N/A"
+                returns_data[ticker] = ["N/A"] * len(PERIODS)
 
 
-# Add a section for Historic Stock vs. Bonds Returns
-st.header("Historic Stock vs. Bonds Returns")
+        # Calculate portfolio returns for each period
+        portfolio_returns = []
+        if not portfolio_daily_returns.empty:
+            for period in PERIODS:
+                ret = calculator.calculate_portfolio_period_return(portfolio_daily_returns, period)
+                portfolio_returns.append(f"{ret:.2%}" if ret is not None else "N/A")
+        else:
+            portfolio_returns = ["N/A"] * len(PERIODS)
 
-# Get current stock allocation
-current_stock_allocation = total_stocks_allocation
+        returns_data["Portfolio"] = portfolio_returns
 
-# Interpolate returns for the current allocation
-interpolated_returns = calculator.interpolate_returns(current_stock_allocation)
+        # Create and display the returns DataFrame
+        returns_df = pd.DataFrame(returns_data)
+        returns_df = returns_df.set_index("Period") # Set Period as the index
 
-# Create a DataFrame to display the interpolated returns
-returns_data = {
-    "Metric": ["Max Return", "Average Return", "Min Return"],
-    "Value (%)": [
-        f"{interpolated_returns['Max_Return']:.1f}%",
-        f"{interpolated_returns['Avg_Return']:.1f}%",
-        f"{interpolated_returns['Min_Return']:.1f}%"
-    ]
-}
-returns_df = pd.DataFrame(returns_data)
-
-# Display the table
-st.dataframe(returns_df)
-
+        # Modify column names to include earliest date
+        new_column_names = {}
+        for ticker in CONFIGURED_HELPERS:
+            new_column_names[ticker] = f"{ticker} ({fund_earliest_dates[ticker]})"
+        # Add Portfolio column name
+        new_column_names["Portfolio"] = "Portfolio"
+        returns_df = returns_df.rename(columns=new_column_names)
+        returns_df = returns_df.T
+        st.subheader("Period Returns")
+        st.dataframe(returns_df)
 
 # Add a section for allocation visualizations
 st.header("Allocation Visualizations")
@@ -250,99 +283,19 @@ for chart_title, (sizes, chart_labels) in pie_chart_data.items():
 # Add a section for historical performance
 st.header("Historical Performance")
 
-# Define the periods to display returns for
-PERIODS = ["1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "max"]
+if not portfolio_daily_returns.empty:
+    cumulative_returns_series = calculator.calculate_cumulative_returns(portfolio_daily_returns) # Renamed for clarity
+    st.subheader("Cumulative Returns (Max History)")
 
-# Load historical data from the CSV file
-historical_data_df = data_fetcher.load_historical_data(CONFIGURED_HELPERS)
+    # Use the visualizer function to generate Plotly chart
+    fig = visualizer.generate_historical_performance_plotly_chart(cumulative_returns_series, title="Cumulative Returns (Max History)")
+    st.plotly_chart(fig, use_container_width=True) # Display the Plotly figure
 
-if not historical_data_df.empty:
-    # The data is already in the wide format (Date, Ticker1, Ticker2, ...)
-    # Set the 'Date' column as the index for calculations
-    combined_data = historical_data_df.set_index('Date')
-
-    # Ensure columns used in calculation are numeric (should be handled by load_historical_data, but double check)
-    numeric_cols = [col for col in CONFIGURED_HELPERS if col in combined_data.columns]
-    for col in numeric_cols:
-         combined_data[col] = pd.to_numeric(combined_data[col], errors='coerce')
-    combined_data.dropna(subset=numeric_cols, inplace=True) # Drop rows with NaN in ticker columns
-
-    # Calculate daily portfolio returns
-    portfolio_daily_returns = calculator.calculate_portfolio_returns(combined_data, allocations)
-
-    # Prepare data for the returns table
-    returns_data = {}
-    returns_data["Period"] = PERIODS
-
-    # Get earliest date for each fund and calculate individual fund returns
-    fund_earliest_dates = {}
-    for ticker in CONFIGURED_HELPERS:
-        if ticker in combined_data.columns:
-            fund_prices = combined_data[ticker].dropna() # Drop NaNs to find the first valid date
-            if not fund_prices.empty:
-                earliest_date = fund_prices.index.min()
-                fund_earliest_dates[ticker] = earliest_date.strftime('%#m/%#d/%Y') # Format as M/D/YYYY
-            else:
-                fund_earliest_dates[ticker] = "N/A"
-
-            fund_returns = []
-            for period in PERIODS:
-                # Use the original combined_data for calculations, not the dropna version used for finding earliest date
-                ret = calculator.calculate_individual_fund_period_return(combined_data[ticker].dropna(), period) # Pass dropna series for calculation
-                fund_returns.append(f"{ret:.2%}" if ret is not None else "N/A")
-            returns_data[ticker] = fund_returns
-        else:
-            # If ticker data is not in the loaded data (shouldn't happen with current load logic, but as a fallback)
-            fund_earliest_dates[ticker] = "N/A"
-            returns_data[ticker] = ["N/A"] * len(PERIODS)
-
-
-    # Calculate portfolio returns for each period
-    portfolio_returns = []
-    if not portfolio_daily_returns.empty:
-        for period in PERIODS:
-            ret = calculator.calculate_portfolio_period_return(portfolio_daily_returns, period)
-            portfolio_returns.append(f"{ret:.2%}" if ret is not None else "N/A")
-    else:
-        portfolio_returns = ["N/A"] * len(PERIODS)
-
-    returns_data["Portfolio"] = portfolio_returns
-
-    # Create and display the returns DataFrame
-    returns_df = pd.DataFrame(returns_data)
-    returns_df = returns_df.set_index("Period") # Set Period as the index
-
-    # Modify column names to include earliest date
-    new_column_names = {}
-    for ticker in CONFIGURED_HELPERS:
-        new_column_names[ticker] = f"{ticker} ({fund_earliest_dates[ticker]})"
-    # Add Portfolio column name
-    new_column_names["Portfolio"] = "Portfolio"
-
-    returns_df = returns_df.rename(columns=new_column_names)
-
-
-    returns_df = returns_df.T
-    st.subheader("Period Returns (%)")
-    st.dataframe(returns_df)
-
-    # Display the cumulative returns line chart below the table
-    if not portfolio_daily_returns.empty:
-        cumulative_returns_series = calculator.calculate_cumulative_returns(portfolio_daily_returns) # Renamed for clarity
-        st.subheader("Cumulative Returns (Max History)")
-
-        # Use the visualizer function to generate Plotly chart
-        fig = visualizer.generate_historical_performance_plotly_chart(cumulative_returns_series, title="Cumulative Returns (Max History)")
-        st.plotly_chart(fig, use_container_width=True) # Display the Plotly figure
-
-        # Store portfolio_daily_returns in session state for risk metrics and projections
-        st.session_state['portfolio_daily_returns'] = portfolio_daily_returns
-    else:
-         st.warning("Could not calculate portfolio returns for cumulative chart.")
-
-
+    # Store portfolio_daily_returns in session state for risk metrics and projections
+    st.session_state['portfolio_daily_returns'] = portfolio_daily_returns
 else:
-    st.warning("Historical data not available for performance calculation. Please download or update the data.")
+     st.warning("Could not calculate portfolio returns for cumulative chart.")
+
 
 # Add sections for additional features
 st.header("Additional Features")

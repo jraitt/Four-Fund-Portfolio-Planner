@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from pandas.tseries.offsets import DateOffset
 
 def calculate_allocations(total_stocks_allocation: float, international_stocks_allocation_within_stocks: float, international_bonds_allocation_within_bonds: float) -> dict:
     """
@@ -203,8 +204,6 @@ def project_future_value(daily_returns: pd.Series, current_value: float, years: 
 
     return projected_value
 
-from pandas.tseries.offsets import DateOffset
-
 def calculate_individual_fund_period_return(prices: pd.Series, period_label: str) -> float | None:
     """
     Calculates the percentage return for a single fund over a specified period.
@@ -226,6 +225,26 @@ def calculate_individual_fund_period_return(prices: pd.Series, period_label: str
     if period_label == "max":
         start_price = prices.iloc[0]
         return (end_price / start_price) - 1
+    elif period_label == "ytd":
+        # Calculate Year-to-Date return
+        end_year = end_date.year
+
+        # Calculate Year-to-Date return using the last trading day of the previous year as the base
+        start_of_current_year = pd.Timestamp(f'{end_year}-01-01')
+        # Find the last trading day of the previous year
+        previous_year_end_date_series = prices.loc[prices.index < start_of_current_year]
+
+        if previous_year_end_date_series.empty:
+            # If no data in the previous year, use the first available data point in the current year
+            current_year_start_date_series = prices.loc[prices.index >= start_of_current_year]
+            if current_year_start_date_series.empty:
+                return None # No data points in the current year
+            start_price = current_year_start_date_series.iloc[0]
+        else:
+            start_price = previous_year_end_date_series.iloc[-1]
+
+        return (end_price / start_price) - 1
+
     else:
         offset = None
         if period_label == "1mo":
@@ -247,13 +266,22 @@ def calculate_individual_fund_period_return(prices: pd.Series, period_label: str
 
         target_start_date = end_date - offset
 
-        # Find the price at the closest date on or before the target_start_date
-        start_price_series = prices.loc[prices.index <= target_start_date]
+        # Find the closest trading day on or before the target_start_date
+        start_date_series = prices.loc[prices.index <= target_start_date]
 
-        if start_price_series.empty:
+        if start_date_series.empty:
             return None # Not enough historical data for the period
 
-        start_price = start_price_series.iloc[-1]
+        # Use the price from the trading day *before* the start of the period
+        # If the target_start_date is the very first date, use that date's price
+        if start_date_series.index[-1] == prices.index[0]:
+             start_price = start_date_series.iloc[-1]
+        else:
+            # Find the index of the closest date on or before target_start_date
+            closest_date_index = prices.index.get_loc(start_date_series.index[-1])
+            # Get the price from the day before
+            start_price = prices.iloc[closest_date_index - 1]
+
 
         return (end_price / start_price) - 1
 

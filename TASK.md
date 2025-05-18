@@ -63,6 +63,8 @@ This document outlines the tasks required to build the Four Fund Portfolio Plann
 
 - [x] Add 'Selected Portfolio Details' table (Yield, ER, Beta, Period Returns) below 'Fund Details' table. (Date: 2025-05-07)
 - [x] Change orientation of "Period Returns (%)" table in `app.py` so periods are columns and tickers/portfolio are rows. (Date: 2025-05-15)
+- [x] Add YTD calculation based on historical data and add it to the "Period Returns" table. (Date: 2025-05-16)
+- [ ] When 100% stocks, 0% US stocks, the periods return table portfolio row should mirror the "VTI" row. (Date: 2025-05-18)
 (Add any new tasks or TODOs discovered during development here)
 
 ## Completed Tasks
