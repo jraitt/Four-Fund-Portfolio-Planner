@@ -201,20 +201,25 @@ if fund_details_list:
         returns_data["Period"] = PERIODS
 
         # Get earliest date for each fund and calculate individual fund returns
+        # Get earliest non-zero date for each fund and calculate individual fund returns
         fund_earliest_dates = {}
         for ticker in CONFIGURED_HELPERS:
             if ticker in combined_data.columns:
-                fund_prices = combined_data[ticker].dropna() # Drop NaNs to find the first valid date
-                if not fund_prices.empty:
-                    earliest_date = fund_prices.index.min()
+                fund_prices = combined_data[ticker]
+                # Find the index of the first non-zero price
+                first_non_zero_index = fund_prices[fund_prices != 0].first_valid_index()
+
+                if first_non_zero_index is not None:
+                    earliest_date = fund_prices.index[fund_prices.index.get_loc(first_non_zero_index)]
                     fund_earliest_dates[ticker] = earliest_date.strftime('%#m/%#d/%Y') # Format as M/D/YYYY
+                    print(fund_earliest_dates[ticker])
                 else:
-                    fund_earliest_dates[ticker] = "N/A"
+                    fund_earliest_dates[ticker] = "N/A" # No non-zero prices found
 
                 fund_returns = []
                 for period in PERIODS:
                     # Use the original combined_data for calculations, not the dropna version used for finding earliest date
-                    ret = calculator.calculate_individual_fund_period_return(combined_data[ticker].dropna(), period) # Pass dropna series for calculation
+                    ret = calculator.calculate_individual_fund_period_return(combined_data[ticker], period) # Pass the full series
                     fund_returns.append(f"{ret:.2%}" if ret is not None else "N/A")
                 returns_data[ticker] = fund_returns
             else:

@@ -223,7 +223,12 @@ def calculate_individual_fund_period_return(prices: pd.Series, period_label: str
     end_price = prices.iloc[-1]
 
     if period_label == "max":
-        start_price = prices.iloc[0]
+        # Find the index of the first non-zero price
+        first_non_zero_index = prices[prices != 0].first_valid_index()
+        if first_non_zero_index is None:
+            return None # No non-zero prices found
+
+        start_price = prices.loc[first_non_zero_index]
         return (end_price / start_price) - 1
     elif period_label == "ytd":
         # Calculate Year-to-Date return
@@ -303,7 +308,13 @@ def calculate_portfolio_period_return(daily_portfolio_returns: pd.Series, period
     end_date = daily_portfolio_returns.index[-1]
 
     if period_label == "max":
-        cumulative_returns = (1 + daily_portfolio_returns).cumprod() - 1
+        # Find the index of the first non-zero daily return
+        first_non_zero_index = daily_portfolio_returns[daily_portfolio_returns != 0].first_valid_index()
+        if first_non_zero_index is None:
+            return None # No non-zero daily returns found
+
+        # Calculate cumulative returns starting from the first non-zero daily return
+        cumulative_returns = (1 + daily_portfolio_returns.loc[first_non_zero_index:]).cumprod() - 1
         return cumulative_returns.iloc[-1]
     elif period_label == "ytd":
         # Calculate Year-to-Date return

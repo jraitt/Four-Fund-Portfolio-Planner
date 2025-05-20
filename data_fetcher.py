@@ -316,13 +316,15 @@ def load_historical_data(tickers: list[str] = None) -> pd.DataFrame:
         subset_cols_to_check = tickers if tickers is not None else df.columns.tolist()
         if 'Date' in subset_cols_to_check:
              subset_cols_to_check.remove('Date')
-        if subset_cols_to_check: # Only drop if there are columns to check
-             df.dropna(subset=subset_cols_to_check, inplace=True)
-
-
         # Ensure data is sorted by Date
         df = df.sort_values(by=['Date'])
 
+        # Fill NaN values in ticker columns with 0.0
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = df[col].fillna(0.0)
+
+        print(df)
         return df
 
     except Exception as e:
