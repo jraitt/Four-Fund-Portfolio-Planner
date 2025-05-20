@@ -369,20 +369,3 @@ if uploaded_file is not None:
     # If loaded_allocations is not None, you could potentially store it in session state
     # and use a callback with the sliders to update their values on rerun.
 
-# Portfolio Comparison
-st.subheader("Portfolio Comparison")
-st.write("Define multiple portfolios and compare their metrics and performance here.")
-
-# TODO: Implement UI for defining multiple portfolios
-# TODO: Implement logic for fetching data and calculating metrics for multiple portfolios
-# TODO: Implement display for comparing portfolios (table or chart)
-
-# You would call data_fetcher functions here based on user inputs and display results
-# Example:
-# fund_details = data_fetcher.fetch_fund_details("VTI")
-# if fund_details:
-#     st.write("VTI Details:", fund_details)
-
-# historical_data = data_fetcher.fetch_historical_data("VTI", period="1y")
-# if not historical_data.empty:
-#     st.line_chart(historical_data['Close'])

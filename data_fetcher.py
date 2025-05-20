@@ -1,47 +1,8 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import yfinance as yf
 from datetime import datetime, timedelta
 import os
-
-# Basic in-memory cache
-_data_cache = {}
-
-def fetch_historical_data(ticker: str, period: str = "10y") -> pd.DataFrame:
-    """
-    Fetches historical data for a given ticker.
-
-    Args:
-        ticker (str): The stock ticker symbol.
-        period (str): The period for which to fetch data (e.g., "1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"). Defaults to "10y".
-
-    Returns:
-        pd.DataFrame: DataFrame containing historical data, or an empty DataFrame if fetching fails.
-    """
-    if ticker in _data_cache and period in _data_cache[ticker]:
-        print(f"Fetching {ticker} data for {period} from cache.")
-        return _data_cache[ticker][period]
-
-    print(f"Fetching {ticker} data for {period} from Yahoo Finance.")
-    try:
-        # Fetch data
-        data = yf.download(ticker, period=period, auto_adjust=False)
-
-        # Store in cache
-        if ticker not in _data_cache:
-            _data_cache[ticker] = {}
-        _data_cache[ticker][period] = data
-
-        # Check if data is not empty and has 'Adj Close' column
-        if not data.empty and 'Adj Close' in data.columns:
-            return data
-        else:
-            print(f"Fetched empty data or missing 'Adj Close' for {ticker}.")
-            return pd.DataFrame()
-    except Exception as e:
-        print(f"Error fetching data for {ticker}: {e}")
-        return pd.DataFrame()
 
 def fetch_fund_details(ticker: str) -> dict:
     """
@@ -334,37 +295,4 @@ if __name__ == '__main__':
     # Example Usage
     tickers = ["VTI", "VEA", "BND", "BNDX"]
 
-    # Example of fetching and storing max history (can be run manually)
-    # fetch_and_store_max_history(tickers)
 
-    # Example of getting the last data date
-    # last_date_overall = get_last_data_date()
-    # print(f"Overall last data date: {last_date_overall}")
-    # last_date_vti = get_last_data_date("VTI")
-    # print(f"Last data date for VTI: {last_date_vti}")
-
-    # Example of updating historical data (can be run manually)
-    # update_historical_data(tickers)
-
-    # Example of loading historical data
-    # historical_data_all = load_historical_data()
-    # print("\nLoaded Historical Data (all tickers):\n", historical_data_all.head())
-    # print("\nLoaded Historical Data (all tickers):\n", historical_data_all.tail())
-
-    # historical_data_vti_bnd = load_historical_data(["VTI", "BND"])
-    # print("\nLoaded Historical Data (VTI and BND):\n", historical_data_vti_bnd.head())
-    # print("\nLoaded Historical Data (VTI and BND):\n", historical_data_vti_bnd.tail())
-
-    # Original example usage for fetching 1 year data and fund details
-    for ticker in tickers:
-        historical_data = fetch_historical_data(ticker, period="1y")
-        if not historical_data.empty:
-            print(f"\nHistorical Data for {ticker} (last 1 year):\n", historical_data.head())
-
-        fund_details = fetch_fund_details(ticker)
-        if fund_details:
-            print(f"\nDetails for {ticker}:\n", fund_details)
-
-    # Demonstrate caching
-    print("\nFetching VTI data again to demonstrate caching:")
-    fetch_historical_data("VTI", period="1y")
