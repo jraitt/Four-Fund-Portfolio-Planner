@@ -323,8 +323,6 @@ def load_historical_data(tickers: list[str] = None) -> pd.DataFrame:
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = df[col].fillna(0.0)
-
-        print(df)
         return df
 
     except Exception as e:

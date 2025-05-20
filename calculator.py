@@ -108,8 +108,9 @@ def calculate_portfolio_returns(historical_data: pd.DataFrame, allocations: dict
         return pd.Series()
 
     # Calculate daily returns for individual assets
-    # Calculate daily returns for individual assets, explicitly setting fill_method=None
-    daily_returns = historical_data.pct_change(fill_method=None).dropna()
+    # Replace infinite values (resulting from division by zero, e.g., price going from 0 to non-zero) with 0
+    # Fill remaining missing values (initial NaNs from pct_change and 0/0 cases) with 0
+    daily_returns = historical_data.pct_change().replace([np.inf, -np.inf], 0).fillna(0)
 
     # Ensure tickers in allocations match columns in daily_returns
     valid_tickers = [ticker for ticker in allocations if ticker in daily_returns.columns]
@@ -306,7 +307,6 @@ def calculate_portfolio_period_return(daily_portfolio_returns: pd.Series, period
 
     daily_portfolio_returns = daily_portfolio_returns.sort_index() # Ensure sorted by date
     end_date = daily_portfolio_returns.index[-1]
-
     if period_label == "max":
         # Find the index of the first non-zero daily return
         first_non_zero_index = daily_portfolio_returns[daily_portfolio_returns != 0].first_valid_index()

@@ -212,7 +212,7 @@ if fund_details_list:
                 if first_non_zero_index is not None:
                     earliest_date = fund_prices.index[fund_prices.index.get_loc(first_non_zero_index)]
                     fund_earliest_dates[ticker] = earliest_date.strftime('%#m/%#d/%Y') # Format as M/D/YYYY
-                    print(fund_earliest_dates[ticker])
+                    #print(fund_earliest_dates[ticker])
                 else:
                     fund_earliest_dates[ticker] = "N/A" # No non-zero prices found
 

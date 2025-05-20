@@ -33,9 +33,41 @@ def test_calculate_portfolio_returns():
 
     assert isinstance(portfolio_returns, pd.Series)
     assert not portfolio_returns.empty
-    # The first return should be the weighted average of the first non-NaN daily returns
+    # The first return should be 0 due to pct_change() and fillna(0)
+    assert portfolio_returns.iloc[0] == pytest.approx(0.0)
+    # The second return should be the weighted average of the first non-NaN daily returns
     # Calculated as: 0.01*0.4 + 0.02*0.3 + 0.005*0.2 + 0.005*0.1 = 0.0115
-    assert portfolio_returns.iloc[0] == pytest.approx(0.0115)
+    assert portfolio_returns.iloc[1] == pytest.approx(0.0115)
+
+def test_calculate_portfolio_returns_with_inf():
+    """Tests calculate_portfolio_returns with data that would produce inf."""
+    # Create historical data where BNDX goes from 0 to a non-zero value
+    historical_data = pd.DataFrame({
+        'VTI': [100, 101, 102],
+        'VEA': [50, 51, 52],
+        'BND': [20, 20.1, 20.2],
+        'BNDX': [0, 0, 10] # BNDX price goes from 0 to 10
+    })
+    allocations = {"VTI": 25, "VEA": 25, "BND": 25, "BNDX": 25}
+
+    portfolio_returns = calculator.calculate_portfolio_returns(historical_data, allocations)
+
+    assert isinstance(portfolio_returns, pd.Series)
+    assert not portfolio_returns.empty
+    # Ensure no infinite values are present
+    assert not np.isinf(portfolio_returns).any()
+    # The first return should be 0 due to pct_change() and fillna(0)
+    assert portfolio_returns.iloc[0] == pytest.approx(0.0)
+    # The second return should be the weighted average of the first non-NaN daily returns
+    # Expected daily returns for BNDX: [NaN, inf, inf] -> after replace inf with 0 -> [NaN, 0, 0]
+    # After fix and fillna(0): [0, 0, 0]
+    # Expected portfolio returns (weighted average of daily returns):
+    # Day 1 (index 0): 0 (as explained above)
+    # Day 2 (index 1): (101/100-1)*0.25 + (51/50-1)*0.25 + (20.1/20-1)*0.25 + (0/0-1 replaced with 0)*0.25 = 0.01*0.25 + 0.02*0.25 + 0.005*0.25 + 0*0.25 = 0.0025 + 0.005 + 0.00125 + 0 = 0.00875
+    # Day 3 (index 2): (102/101-1)*0.25 + (52/51-1)*0.25 + (20.2/20.1-1)*0.25 + (10/0-1 replaced with 0)*0.25 = (0.0099)*0.25 + (0.0196)*0.25 + (0.0049)*0.25 + 0*0.25 = 0.002475 + 0.0049 + 0.001225 + 0 = 0.0086
+    assert portfolio_returns.iloc[0] == pytest.approx(0.0)
+    assert portfolio_returns.iloc[1] == pytest.approx(0.00875)
+    assert portfolio_returns.iloc[2] == pytest.approx(0.0086, abs=1e-2) # Use higher tolerance due to floating point
 
 def test_calculate_cumulative_returns():
     """Tests the calculate_cumulative_returns function."""

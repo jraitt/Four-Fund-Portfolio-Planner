@@ -65,6 +65,7 @@ This document outlines the tasks required to build the Four Fund Portfolio Plann
 - [x] Change orientation of "Period Returns (%)" table in `app.py` so periods are columns and tickers/portfolio are rows. (Date: 2025-05-15)
 - [x] Add YTD calculation based on historical data and add it to the "Period Returns" table. (Date: 2025-05-16)
 - [ ] When 100% stocks, 0% US stocks, the periods return table portfolio row should mirror the "VTI" row. (Date: 2025-05-18)
+- [ ] Fix "inf" values in `daily_portfolio_returns` for 2013-06-04, likely caused by division by zero when calculating percentage change due to missing historical data for BNDX. (Date: 2025-05-20)
 (Add any new tasks or TODOs discovered during development here)
 
 ## Completed Tasks
