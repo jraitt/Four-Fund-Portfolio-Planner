@@ -35,6 +35,9 @@ This document outlines the tasks required to build the Four Fund Portfolio Plann
 - [ ] **Portfolio Comparison:**
     - [ ] Implement a UI section to define multiple portfolios.
     - [ ] Display a comparison table or chart of key metrics and performance for selected portfolios.
+- [x] **Add 1-week (1w) returns to Period Returns table:**
+    - [x] Update `app.py` to include "1w" in the `PERIODS` list.
+    - [x] Update `calculator.py` to handle "1w" period for individual fund and portfolio returns.
 
 ## Testing
 

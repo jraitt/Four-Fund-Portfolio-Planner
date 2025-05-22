@@ -253,7 +253,9 @@ def calculate_individual_fund_period_return(prices: pd.Series, period_label: str
 
     else:
         offset = None
-        if period_label == "1mo":
+        if period_label == "1w":
+            offset = DateOffset(weeks=1)
+        elif period_label == "1mo":
             offset = DateOffset(months=1)
         elif period_label == "3mo":
             offset = DateOffset(months=3)
@@ -344,7 +346,9 @@ def calculate_portfolio_period_return(daily_portfolio_returns: pd.Series, period
 
     else:
         offset = None
-        if period_label == "1mo":
+        if period_label == "1w":
+            offset = DateOffset(weeks=1)
+        elif period_label == "1mo":
             offset = DateOffset(months=1)
         elif period_label == "3mo":
             offset = DateOffset(months=3)

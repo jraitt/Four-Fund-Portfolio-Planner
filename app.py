@@ -126,7 +126,7 @@ allocations = calculator.calculate_allocations(
 portfolio_daily_returns = st.session_state.get('portfolio_daily_returns', pd.Series())
 
 # Define the periods to display returns for
-PERIODS = ["1mo", "3mo", "6mo", "ytd", "1y", "2y", "5y", "10y", "max"]
+PERIODS = ["1w", "1mo", "3mo", "6mo", "ytd", "1y", "2y", "5y", "10y", "max"]
 
 # Fetch and display fund details
 tickers = ["VTI", "VEA", "BND", "BNDX"]
@@ -368,4 +368,3 @@ if uploaded_file is not None:
     loaded_allocations = load_portfolio(uploaded_file)
     # If loaded_allocations is not None, you could potentially store it in session state
     # and use a callback with the sliders to update their values on rerun.
-
