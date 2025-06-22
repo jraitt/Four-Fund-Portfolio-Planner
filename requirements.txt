@@ -6,3 +6,7 @@ numpy
 scikit-learn
 pytest
 plotly
+
+# Your custom package from GitHub
+git+https://github.com/jraitt/YahooFinance.git
+

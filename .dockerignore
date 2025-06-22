@@ -1,0 +1,13 @@
+# Git and VS Code
+.git
+.gitignore
+.vscode/
+
+# Python virtual environment and cache
+.venv
+__pycache__/
+*.pyc
+
+# Docker
+Dockerfile
+.dockerignore
