@@ -86,6 +86,8 @@ This document outlines the tasks required to build the Four Fund Portfolio Plann
 - [x] Fix failing tests in tests/test_calculator.py and tests/test_visualizer.py (Date: 2025-05-07)
 - [x] Modify `app.py` to use `visualizer.generate_historical_performance_chart` for the cumulative returns display with correct title and Y-axis percentage formatting (Date: 2025-05-07)
 - [x] In `data_fetcher.py`, ensure `load_historical_data` includes all dates and fills missing fund values with "0.0". (Date: 2025-05-19)
+- [x] Fix error at line 181 in app.py (Date: 2025-07-01)
+- [x] Multiply percentage amounts in "Period Returns" table by 100 (Date: 2025-07-01)
 
 ## Persistent Historical Data Storage & Update
 

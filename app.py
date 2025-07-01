@@ -143,13 +143,50 @@ allocations = calculate_allocations(
 tickers = ["VTI", "VEA", "BND", "BNDX"]
 fund_details_df = yf_utilities.fetch_fund_details(tickers)
 
+# Multiply percentage columns by 100 for display
+if 'Yield' in fund_details_df.columns:
+    fund_details_df['Yield'] = fund_details_df['Yield'] * 100
+if 'ER' in fund_details_df.columns:
+    fund_details_df['ER'] = fund_details_df['ER'] * 100
+if 'D Ch%' in fund_details_df.columns:
+    fund_details_df['D Ch%'] = fund_details_df['D Ch%'] * 100
 
 st.subheader("Fund Details") # Keep a simple subheader# Display the table, hiding the default index
-st.dataframe(fund_details_df, hide_index=True)
+column_config_details = {
+    "Price": st.column_config.NumberColumn(format="$%.2f"),
+    "P Close": st.column_config.NumberColumn(format="$%.2f"),
+    "52 High": st.column_config.NumberColumn(format="$%.2f"),
+    "52 Low": st.column_config.NumberColumn(format="$%.2f"),
+    "50 Day": st.column_config.NumberColumn(format="$%.2f"),
+    "200 Day": st.column_config.NumberColumn(format="$%.2f"),
+    "D Ch": st.column_config.NumberColumn(format="$%.2f"),
+    "Yield": st.column_config.NumberColumn(format="%.2f%%"),
+    "ER": st.column_config.NumberColumn(format="%.2f%%"),
+    "D Ch%": st.column_config.NumberColumn(format="%.2f%%"),
+}
+# Filter to only include columns that exist in the DataFrame
+column_config_details = {k: v for k, v in column_config_details.items() if k in fund_details_df.columns}
+st.dataframe(fund_details_df, hide_index=True, column_config=column_config_details)
 
 returns_df = yf_utilities.get_historical_returns(tickers)
+
+# Multiply percentage columns by 100 for display
+for col in ["1w", "1mo", "3mo", "6mo", "ytd", "1y", "2y", "3y", "5y", "10y", "max"]:
+    if col in returns_df.columns:
+        # Ensure the column is numeric before multiplication, coercing errors to NaN
+        returns_df[col] = pd.to_numeric(returns_df[col], errors='coerce')
+        # Only multiply if the value is not NaN (i.e., it was successfully converted to a number)
+        returns_df[col] = returns_df[col].apply(lambda x: x * 100 if pd.notna(x) else x)
+
 st.subheader("Period Returns")
-st.dataframe(returns_df)
+column_config_returns = {
+    col: st.column_config.NumberColumn(format="%.2f%%")
+    for col in returns_df.columns if col != "Symbol"
+}
+st.dataframe(returns_df, column_config=column_config_returns)
+
+# Display Year-to-Date return
+
 
 # Add a section for allocation visualizations
 st.header("Allocation Visualizations")
